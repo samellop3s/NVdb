@@ -1,25 +1,31 @@
 import pandas as pd
 
+COLUNAS_OBRIGATORIAS = [
+    "Carteira",
+    "Pagador",
+    "CPF/CNPJ Pagador",
+    "Tipo",
+    "Nosso Número",
+    "Seu Número",
+    "Data Emissão",
+    "Data Vencimento",
+    "Data Baixa",
+    "Valor Título (R$)",
+]
 
 def carregar_planilha(caminho_arquivo):
-    df = pd.read_excel(caminho_arquivo, skiprows=6)
+    try:
+        df = pd.read_excel(caminho_arquivo, skiprows=6)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Arquivo não encontrado: {caminho_arquivo}")
 
     df.columns = df.columns.str.strip()
 
-    colunas_desejadas = [
-        "Carteira",
-        "Pagador",
-        "CPF/CNPJ Pagador",
-        "Tipo",
-        "Nosso Número",
-        "Seu Número",
-        "Data Emissão",
-        "Data Vencimento",
-        "Data Baixa",
-        "Valor Título (R$)",
-    ]
+    faltando = [col for col in COLUNAS_OBRIGATORIAS if col not in df.columns]
+    if faltando:
+        raise ValueError(f"Colunas faltando na planilha: {faltando}")
 
-    df = df[colunas_desejadas]
+    df = df[COLUNAS_OBRIGATORIAS]
 
     df["Data Vencimento"] = pd.to_datetime(
         df["Data Vencimento"], dayfirst=True, errors="coerce"
@@ -33,24 +39,28 @@ def carregar_planilha(caminho_arquivo):
         df["Valor Título (R$)"], errors="coerce"
     )
 
+    if df.empty:
+        raise ValueError("A planilha está vazia após o processamento.")
+
     return df
 
 
 # 📅 Boletos vencidos
 def boletos_vencidos(df):
     hoje = pd.Timestamp.today().normalize()
-    return df[(df["Data Vencimento"] < hoje) & (df["Data Baixa"].isna())]
-
-
-# ⏳ Boletos a vencer em X dias
+    return df[
+        (df["Data Vencimento"] < hoje) &
+        (df["Data Baixa"].isna())
+    ]
+# ⏳ Boletos que vencem em X dias
 def boletos_a_vencer(df, dias=5):
     hoje = pd.Timestamp.today().normalize()
     limite = hoje + pd.Timedelta(days=dias)
 
     return df[
-        (df["Data Vencimento"] >= hoje)
-        & (df["Data Vencimento"] <= limite)
-        & (df["Data Baixa"].isna())
+        (df["Data Vencimento"] >= hoje) &
+        (df["Data Vencimento"] <= limite) &
+        (df["Data Baixa"].isna())
     ]
 
 
@@ -76,3 +86,4 @@ def resumo_financeiro(df):
         "Total em Aberto": total_aberto,
         "Total Pago": total_pago,
     }
+
